@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Round 2 Draft</title>
+<style>
+:root{--bg:#0f2229;--panel:#16323b;--line:#2a4b56;--tx:#e8f0f2;--mute:#8fa9b2;--cy:#5ee0e6;--a:#f2b84b;--b:#a98bff;--bad:#ff7a7a;--ok:#7be0a0}
+@media(prefers-color-scheme:light){:root:not([data-theme="dark"]){--bg:#eef4f5;--panel:#fff;--line:#c4d6da;--tx:#10262d;--mute:#52707a;--cy:#087c86;--a:#b36f00;--b:#6b46d9;--bad:#c62828;--ok:#1b8a4b}}
+:root[data-theme="light"]{--bg:#eef4f5;--panel:#fff;--line:#c4d6da;--tx:#10262d;--mute:#52707a;--cy:#087c86;--a:#b36f00;--b:#6b46d9;--bad:#c62828;--ok:#1b8a4b}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
+h1,h2,h3,.disp{font-family:"Trebuchet MS","Segoe UI",system-ui,sans-serif;margin:0;font-weight:700;letter-spacing:.01em}
+main{max-width:1100px;margin:0 auto;padding:20px 16px 48px}
+button,input,select{font:inherit;color:inherit}
+button{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:7px 12px;cursor:pointer}
+button:hover:not(:disabled){border-color:var(--cy)}button:disabled{opacity:.4;cursor:default}
+button.go{background:var(--cy);color:#06242a;border-color:var(--cy);font-weight:600}
+:focus-visible{outline:2px solid var(--cy);outline-offset:2px}
+input,select{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:7px 10px;width:100%}
+.row{display:flex;gap:12px;flex-wrap:wrap;align-items:center}.sp{flex:1}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px;margin-bottom:12px}
+.mute{color:var(--mute)}.A{color:var(--a)}.B{color:var(--b)}
+header{display:flex;justify-content:space-between;align-items:end;gap:12px;flex-wrap:wrap;margin-bottom:16px}
+header h1{font-size:26px}
+.ribbon{display:flex;flex-wrap:wrap;gap:3px;margin:12px 0}
+.pip{width:20px;height:20px;border-radius:4px;border:1px solid var(--line);font-size:10px;display:grid;place-items:center}
+.pip.pa{background:color-mix(in srgb,var(--a) 30%,transparent)}.pip.pb{background:color-mix(in srgb,var(--b) 30%,transparent)}
+.pip.done{opacity:.4}.pip.now{outline:2px solid var(--cy);opacity:1}.pip.gap{margin-left:10px}
+.cols{display:grid;grid-template-columns:1fr 1.6fr 1fr;gap:14px}
+@media(max-width:820px){.cols{grid-template-columns:1fr}}
+.chip{display:inline-block;padding:3px 9px;margin:0 4px 4px 0;border-radius:999px;border:1px solid var(--line);font-size:13px}
+.chip.x{text-decoration:line-through;color:var(--bad);border-color:var(--bad)}.chip.keep{border-color:var(--ok)}
+.roster{display:grid;grid-template-columns:repeat(auto-fill,minmax(112px,1fr));gap:6px;max-height:430px;overflow:auto}
+.roster button{text-align:left;padding:7px 9px;font-size:13px}
+.bosses{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:8px;margin:10px 0}
+.boss{border:1px solid var(--line);border-radius:8px;padding:8px 10px;background:var(--panel)}
+.score{font-size:40px;font-weight:700}
+.tbl{overflow-x:auto}table{border-collapse:collapse;width:100%;min-width:520px}td,th{padding:6px;border-bottom:1px solid var(--line);text-align:left;font-weight:400}
+td input{width:96px}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--bad);margin-right:6px}.dot.on{background:var(--ok)}
+.toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--bad);color:#fff;padding:8px 14px;border-radius:8px;z-index:9}
+.banner{border-left:4px solid var(--cy)}
+code{background:var(--bg);padding:2px 6px;border-radius:4px}
+</style>
+</head>
+<body>
+<main>
+<header>
+ <div><h1>Round 2 · 1v1 BO5 draft</h1><div class="mute" id="conn"></div></div>
+ <div class="row" id="tools"></div>
+</header>
+<div id="app"></div>
+</main>
+<script>
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const $=id=>document.getElementById(id);
+const store=sessionStorage; // per tab, so two tabs on one machine act as two devices
+const id=store.ww_id||(store.ww_id=Math.random().toString(36).slice(2)+Date.now().toString(36));
+let ws,st=null,q="",on=false,toastT;
+const send=o=>ws&&ws.readyState===1&&ws.send(JSON.stringify(o));
+function toast(t){clearTimeout(toastT);document.querySelector(".toast")?.remove();const d=document.createElement("div");d.className="toast";d.textContent=t;document.body.append(d);toastT=setTimeout(()=>d.remove(),3500)}
+function connect(){
+ ws=new WebSocket((location.protocol==="https:"?"wss://":"ws://")+location.host);
+ ws.onopen=()=>{on=true;if(store.ww_room)send({type:"join",id,room:store.ww_room,name:store.ww_name,role:store.ww_role});render()};
+ ws.onmessage=e=>{const m=JSON.parse(e.data);
+  if(m.type==="state"){st=m.state;store.ww_room=st.code;render()}
+  else if(m.type==="error"){if(m.code==="no_room"){delete store.ww_room;st=null;render()}toast(m.msg)}};
+ ws.onclose=()=>{on=false;render();setTimeout(connect,1500)};
+}
+const chips=(l,c="")=>l.map(x=>`<span class="chip ${c}">${esc(x)}</span>`).join("")||'<span class="mute">None yet</span>';
+const sideName=s=>esc(st.names?st.names[s]:s);
+function bossBar(){return`<div class="bosses">${st.bosses.map((b,i)=>`<div class="boss"><div class="mute">Game ${i+1}</div><b>${esc(b)}</b></div>`).join("")}</div>`}
+function ribbon(){return'<div class="ribbon">'+st.steps.map((s,i)=>{const gap=i&&s.t!==st.steps[i-1].t?" gap":"";return`<span class="pip p${s.p.toLowerCase()}${i<st.i?" done":""}${i===st.i?" now":""}${gap}" title="${{ban:"Ban",pick:"Pick",tban:"Team ban"}[s.t]} · Player ${s.p}">${s.p}</span>`}).join("")+"</div>"}
+
+function landing(){
+ const nm=store.ww_name||"";
+ return`<div class="card"><h2>Join or host a match</h2>
+ <p class="mute">One person hosts the room. The other device opens the same address and joins with the code.</p>
+ <div class="row"><label class="sp">Your name<input id="name" maxlength="24" value="${esc(nm)}"></label>
+ <label class="sp">Role<select id="role"><option value="player">Player</option><option value="spectator">Spectator / referee</option></select></label></div>
+ <div class="row" style="margin-top:12px"><button class="go" id="create"${on?"":" disabled"}>Create room</button><span class="mute">or</span>
+ <input id="code" placeholder="Room code" maxlength="6" style="max-width:140px;text-transform:uppercase"><button id="join"${on?"":" disabled"}>Join room</button></div></div>`}
+function go(room){const name=$("name").value.trim(),role=$("role").value;store.ww_name=name;store.ww_role=role;send({type:"join",id,room,name,role})}
+
+function lobby(){const h=st.you.isHost,p=st.players;
+ const slot=(s,l)=>p[s]?`<div><span class="dot ${p[s].on?"on":""}"></span><b>${esc(p[s].name)}</b> <span class="mute">${l}</span></div>`:`<div class="mute">Waiting for ${l}…</div>`;
+ return`<div class="card"><h2>Room <code>${st.code}</code></h2>
+ <p class="mute">Other devices on the same network open ${st.lan.length?st.lan.map(u=>`<code>${u}</code>`).join(" or "):`<code>${location.host}</code>`} and enter this code.</p>
+ ${slot("p1","player 1")}${slot("p2","player 2")}<div class="mute">${st.spectators} spectating</div></div>
+ <div class="card"><div class="row"><h3>${esc(st.seeds[st.seed])}</h3><span class="sp"></span>
+ ${h?`<select id="seed" style="width:auto">${st.seeds.map((s,i)=>`<option value="${i}"${i===st.seed?" selected":""}>${s}</option>`).join("")}</select><button id="reroll">Reroll bosses</button>`:""}</div>
+ <div class="mute">Bosses, same order for both players</div>${bossBar()}
+ ${h?`<button class="go" id="start"${p.p1&&p.p2?"":" disabled"}>Draw A / B and start draft</button>`:'<div class="mute">The host starts the draw when both players are in.</div>'}</div>`}
+
+function draft(){const s=st.steps[st.i],cur={ban:"Initial ban",pick:"Pick",tban:"Team ban"}[s.t];
+ const hint={ban:"Choose a character nobody can use.",pick:"Pick a character for your pool of 9.",tban:`Ban a character from ${st.names[s.p==="A"?"B":"A"]}’s pool.`}[s.t];
+ const list=st.canAct?(s.t==="tban"?st.avail:st.avail.filter(c=>c.toLowerCase().includes(q.toLowerCase()))):[];
+ const youTxt=st.you.side?`You are Player ${st.you.side}.`:st.you.isHost?"You are refereeing.":"You are spectating.";
+ return`${bossBar()}${ribbon()}
+ <div class="card banner"><div class="disp ${s.p}" style="font-size:20px">${cur} · ${sideName(s.p)} (Player ${s.p})</div>
+ <div class="mute">${st.canAct?hint:`Waiting for ${sideName(s.p)}.`} Step ${st.i+1} of ${st.steps.length}. ${youTxt}</div></div>
+ <div class="cols">
+ <div class="card"><h3 class="A">${sideName("A")} · A</h3><div class="mute">Pool (${st.pick.A.length}/9)</div>${chips(st.pick.A)}</div>
+ <div class="card">${st.canAct?`${s.t==="tban"?"":'<input id="q" placeholder="Search characters" value="'+esc(q)+'">'}
+  <div class="roster" style="margin-top:8px">${list.map(c=>`<button data-c="${esc(c)}">${esc(c)}</button>`).join("")||'<span class="mute">No match.</span>'}</div>
+  ${s.t!=="tban"?'<div class="row" style="margin-top:10px"><input id="cust" maxlength="30" placeholder="Add a character not listed" class="sp"><button id="addc">Add</button></div>':""}`
+  :'<div class="mute" style="padding:30px 0;text-align:center">Picks appear here as they happen.</div>'}</div>
+ <div class="card"><h3 class="B">${sideName("B")} · B</h3><div class="mute">Pool (${st.pick.B.length}/9)</div>${chips(st.pick.B)}</div></div>
+ <div class="card"><div class="mute">Initial bans (unavailable to both)</div>${chips(st.ban,"x")}
+ ${st.tban.A.length+st.tban.B.length?`<div class="mute" style="margin-top:8px">Team bans</div>${chips([...st.tban.A,...st.tban.B],"x")}`:""}</div>`}
+
+function match(){const pool=p=>st.pick[p].map(c=>`<span class="chip ${st.tban[p==="A"?"B":"A"].includes(c)?"x":"keep"}">${esc(c)}</span>`).join("");
+ const can=p=>st.you.isHost||st.you.side===p;
+ return`<div class="cols" style="grid-template-columns:1fr 1fr">
+ <div class="card"><h3 class="A">${sideName("A")} · available 7</h3>${pool("A")}</div><div class="card"><h3 class="B">${sideName("B")} · available 7</h3>${pool("B")}</div></div>
+ <div class="card"><div class="row"><h2>Match</h2><span class="sp"></span><div class="score"><span class="A">${st.wins.A}</span> <span class="mute">–</span> <span class="B">${st.wins.B}</span></div></div>
+ <p class="mute">Enter your own clear time as 1:23.4 or 83.4 seconds. Type x for a failed clear. First to 3 games wins.</p>
+ ${st.winner?`<div class="disp" style="font-size:22px;color:var(--ok)">${sideName(st.winner)} wins the match</div>`:""}
+ <div class="tbl"><table><tr><th>Game</th><th>Boss</th><th class="A">${sideName("A")}</th><th class="B">${sideName("B")}</th><th>Result</th></tr>
+ ${st.bosses.map((b,i)=>{const r=st.results[i];const cell=p=>can(p)?`<input data-g="${i}" data-p="${p}" value="${esc(st.t[i][p])}">`:esc(st.t[i][p])||'<span class="mute">–</span>';
+ return`<tr><td>${i+1}</td><td>${esc(b)}</td><td>${cell("A")}</td><td>${cell("B")}</td><td>${r==="void"?`Voided ${st.you.isHost?`<button data-rr="${i}">Replace boss</button>`:""}`:r?`<b class="${r}">${sideName(r)}</b>`:'<span class="mute">Pending</span>'}</td></tr>`}).join("")}</table></div>
+ <p class="mute">If both players fail a boss after three attempts each, the host replaces it with a random boss.</p></div>`}
+
+function render(){
+ $("conn").innerHTML=`<span class="dot ${on?"on":""}"></span>${on?"Connected":"Reconnecting…"}${st?` · Room ${st.code} · ${esc(st.you.name)}${st.you.isHost?" (host)":""}`:""}`;
+ $("tools").innerHTML=(st&&st.you.isHost?'<button id="undo">Undo</button><button id="reset">Back to lobby</button>':"")+(st?'<button id="leave">Leave</button>':"")+'<button id="theme">Theme</button>';
+ $("theme").onclick=()=>{const r=document.documentElement,c=r.dataset.theme||(matchMedia("(prefers-color-scheme: light)").matches?"light":"dark");r.dataset.theme=c==="dark"?"light":"dark"};
+ if(st){$("leave").onclick=()=>{delete store.ww_room;st=null;location.reload()};
+  if(st.you.isHost){$("undo").onclick=()=>send({type:"undo"});$("reset").onclick=()=>confirm("Reset the draft and return to the lobby?")&&send({type:"reset"})}}
+ const app=$("app");
+ if(!st){app.innerHTML=landing();$("create").onclick=()=>go(null);$("join").onclick=()=>go($("code").value.trim().toUpperCase());return}
+ app.innerHTML=st.phase==="lobby"?lobby():st.phase==="draft"?draft():match();
+ if(st.phase==="lobby"&&st.you.isHost){$("seed").onchange=e=>send({type:"seed",v:+e.target.value});$("reroll").onclick=()=>send({type:"reroll"});$("start").onclick=()=>send({type:"start"})}
+ if(st.phase==="draft"&&st.canAct){app.querySelectorAll("[data-c]").forEach(b=>b.onclick=()=>send({type:"act",c:b.dataset.c}));
+  const qi=$("q");if(qi)qi.oninput=e=>{q=e.target.value;const p=e.target.selectionStart;render();const n=$("q");n.focus();n.setSelectionRange(p,p)};
+  const a=$("addc");if(a)a.onclick=()=>{send({type:"addChar",name:$("cust").value})}}
+ if(st.phase==="match"){app.querySelectorAll("input[data-g]").forEach(i=>i.onchange=e=>send({type:"time",g:+i.dataset.g,side:i.dataset.p,v:e.target.value}));
+  app.querySelectorAll("[data-rr]").forEach(b=>b.onclick=()=>send({type:"replaceBoss",g:+b.dataset.rr}))}
+}
+render();connect();
+</script>
+</body>
+</html>
