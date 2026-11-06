@@ -3,6 +3,12 @@
   "version": "1.0.0",
   "description": "LAN draft simulator for Wuthering Waves Round 2 1v1 BO5",
   "main": "server.js",
-  "scripts": { "start": "node server.js", "test": "node test.js" },
-  "dependencies": { "ws": "^8.18.0" }
+  "scripts": {
+    "start": "node bot-server.js",
+    "start:multiplayer": "node server.js",
+    "test": "node test.js"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
 }
