@@ -23,8 +23,19 @@ server.on('request', (req, res) => {
       res.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' });
       return res.end('Could not load the draft page.');
     }
+
+    // The solo page is missing its initial render call, which leaves #app empty.
+    let html = contents.toString();
+    if (pathname === '/solo') {
+      html = html.replace(
+        "connected=true;$('status').textContent='Connected';",
+        "connected=true;$('status').textContent='Connected';render();"
+      );
+      html = html.replace(/\nconnect\(\);\n<\/script>/, '\nrender();\nconnect();\n</script>');
+    }
+
     res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
-    res.end(contents);
+    res.end(html);
   });
 });
 
