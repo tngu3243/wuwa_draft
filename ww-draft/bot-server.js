@@ -1,18 +1,18 @@
-// Serve the existing multiplayer UI alongside the preliminary solo-vs-bot UI.
-// The original WebSocket game server remains authoritative for all draft actions.
+// Serve a mode chooser, the solo-vs-bot draft, and the original multiplayer draft.
 const fs = require('fs');
 const path = require('path');
 const { server } = require('./server');
 
-// Replace the original static handler so the classic UI remains available at /multiplayer.
+// Keep the original WebSocket game server authoritative for all draft actions.
 server.removeAllListeners('request');
 server.on('request', (req, res) => {
   const pathname = new URL(req.url, 'http://localhost').pathname;
-  const file = pathname === '/' || pathname === '/solo'
-    ? path.join(__dirname, 'public', 'solo.html')
-    : pathname === '/multiplayer'
-      ? path.join(__dirname, 'public', 'index.html')
-      : null;
+  const pages = {
+    '/': 'home.html',
+    '/solo': 'solo.html',
+    '/multiplayer': 'index.html'
+  };
+  const file = pages[pathname] && path.join(__dirname, 'public', pages[pathname]);
 
   if (!file) {
     res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
@@ -31,7 +31,7 @@ server.on('request', (req, res) => {
 if (require.main === module) {
   const port = +process.env.PORT || 3000;
   server.listen(port, '0.0.0.0', () => {
-    console.log(`\nDraft server running.\n  Play vs bot: http://localhost:${port}\n  Multiplayer: http://localhost:${port}/multiplayer\n`);
+    console.log(`\nDraft server running.\n  Choose a mode: http://localhost:${port}\n  Play vs bot: http://localhost:${port}/solo\n  Multiplayer: http://localhost:${port}/multiplayer\n`);
   });
 }
 module.exports = { server };
